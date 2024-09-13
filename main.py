@@ -1,21 +1,24 @@
 import serial
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox
+from tkinter import Label
 import threading
 import time
 import serial.tools.list_ports
-from bluetooth_module import scan_bluetooth_devices, connect_bluetooth_device, send_weight_via_bluetooth, close_bluetooth_connection
+import qrcode
+from PIL import Image, ImageTk
 
 # Глобальные переменные
 running = False
 selected_port = None
+latest_weight = None
 
 def get_com_ports():
     ports = serial.tools.list_ports.comports()
     return [port.device for port in ports]
 
-def read_weight(label):
-    global running, selected_port
+def read_weight():
+    global running, selected_port, latest_weight
     try:
         with serial.Serial(selected_port, 9600, timeout=1) as ser:
             while running:
@@ -34,13 +37,11 @@ def read_weight(label):
                         weight_string = cleaned_data[weight_end_index:weight_start_index].strip()
 
                         try:
-                            weight_value = float(weight_string)
-                            label.config(text=f"Вес: {weight_value} кг")
-                            send_weight_via_bluetooth(weight_value)  # Отправляем вес по Bluetooth
+                            latest_weight = float(weight_string)
                         except ValueError:
-                            label.config(text="Ошибка: Невозможно преобразовать вес")
+                            latest_weight = None
                     else:
-                        label.config(text="Вес не найден")
+                        latest_weight = None
                 time.sleep(0.5)
     except serial.SerialException as e:
         messagebox.showerror("Ошибка", f"Не удалось открыть порт {selected_port}: {e}")
@@ -49,7 +50,7 @@ def start_reading(label):
     global running, selected_port
     if selected_port:
         running = True
-        thread = threading.Thread(target=read_weight, args=(label,))
+        thread = threading.Thread(target=read_weight)
         thread.start()
     else:
         messagebox.showerror("Ошибка", "Пожалуйста, выберите COM порт")
@@ -62,29 +63,42 @@ def update_port(port):
     global selected_port
     selected_port = port
 
-def scan_and_select_bluetooth_device():
-    devices = scan_bluetooth_devices()
-    if not devices:
-        messagebox.showinfo("Нет устройств", "Не обнаружено Bluetooth-устройств.")
-        return
+def show_current_weight(label):
+    if latest_weight is not None:
+        weight_text = f"Вес: {latest_weight} кг"
+        label.config(text=weight_text)
+        update_qr_code(weight_text)
+    else:
+        label.config(text="Ошибка: Невозможно получить вес")
 
-    # Создаем окно для выбора устройства
-    device_list = [f"{name} ({addr})" for addr, name in devices]
-    selected_device = simpledialog.askstring("Выбор устройства", "Выберите устройство:\n" + "\n".join(device_list))
+def update_qr_code(weight_text):
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(weight_text)
+    qr.make(fit=True)
 
-    if selected_device:
-        # Извлекаем адрес устройства
-        address = selected_device.split(' (')[1].strip(')')
-        connect_bluetooth_device(address)
+    img = qr.make_image(fill='black', back_color='white')
+
+    qr_image = ImageTk.PhotoImage(img)
+    qr_label.config(image=qr_image)
+    qr_label.image = qr_image
 
 def create_window():
-    global window
+    global window, qr_label
     window = tk.Tk()
     window.title("Чтение веса с весов")
 
     # Метка для отображения веса
     label = tk.Label(window, text="Вес: -- кг", font=("Arial", 24))
     label.pack(pady=20)
+
+    # Метка для отображения QR-кода
+    qr_label = tk.Label(window)
+    qr_label.pack(pady=20)
 
     # Получение списка COM портов
     com_ports = get_com_ports()
@@ -109,13 +123,9 @@ def create_window():
     stop_button = tk.Button(window, text="Стоп", command=stop_reading, font=("Arial", 14))
     stop_button.pack(pady=10)
 
-    # Кнопка для подключения к Bluetooth
-    bt_scan_button = tk.Button(window, text="Сканировать Bluetooth", command=scan_and_select_bluetooth_device, font=("Arial", 14))
-    bt_scan_button.pack(pady=10)
-
-    # Кнопка для закрытия Bluetooth соединения
-    bt_disconnect_button = tk.Button(window, text="Отключить Bluetooth", command=close_bluetooth_connection, font=("Arial", 14))
-    bt_disconnect_button.pack(pady=10)
+    # Кнопка "Взвесить"
+    weigh_button = tk.Button(window, text="Взвесить", command=lambda: show_current_weight(label), font=("Arial", 14))
+    weigh_button.pack(pady=10)
 
     window.protocol("WM_DELETE_WINDOW", on_closing)
     window.mainloop()
@@ -125,10 +135,8 @@ def on_closing():
     if running:
         if messagebox.askokcancel("Выход", "Программа все еще работает, хотите выйти?"):
             running = False
-            close_bluetooth_connection()
             window.destroy()
     else:
-        close_bluetooth_connection()
         window.destroy()
 
 if __name__ == "__main__":

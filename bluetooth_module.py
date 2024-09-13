@@ -15,7 +15,7 @@ def connect_bluetooth_device(device_address):
     global bt_socket
     try:
         bt_socket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-        bt_socket.connect((device_address, 1))
+        bt_socket.connect((device_address, 1))  # Подключаемся к устройству
         messagebox.showinfo("Успех", f"Успешно подключено к {device_address}")
     except bluetooth.BluetoothError as e:
         messagebox.showerror("Ошибка", f"Не удалось подключиться к устройству: {e}")
