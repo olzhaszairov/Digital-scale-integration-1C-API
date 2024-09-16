@@ -50,18 +50,21 @@ def read_weight(label):
     except serial.SerialException as e:
         messagebox.showerror("Ошибка", f"Не удалось открыть порт {selected_port}: {e}")
 
-def start_reading(label):
+def toggle_reading(label, button):
     global running, selected_port
-    if selected_port:
-        running = True
-        thread = threading.Thread(target=read_weight, args=(label,))
-        thread.start()
+    if running:
+        # Остановить чтение данных
+        running = False
+        button.config(text="Старт")
     else:
-        messagebox.showerror("Ошибка", "Пожалуйста, выберите COM порт")
-
-def stop_reading():
-    global running
-    running = False
+        if selected_port:
+            # Начать чтение данных
+            running = True
+            button.config(text="Стоп")
+            thread = threading.Thread(target=read_weight, args=(label,))
+            thread.start()
+        else:
+            messagebox.showerror("Ошибка", "Пожалуйста, выберите COM порт")
 
 def update_port(port):
     global selected_port
@@ -97,7 +100,7 @@ def write_weight_to_file():
             file.write(f"Вес: {latest_weight} кг\n")
 
 def create_window():
-    global window, qr_label
+    global window, qr_label, selected_port
     window = tk.Tk()
     window.title("Чтение веса с весов")
 
@@ -116,21 +119,21 @@ def create_window():
         messagebox.showerror("Ошибка", "Не найдено доступных COM портов")
         window.destroy()
         return
+    elif len(com_ports) == 1:
+        # Если найден только один COM порт, выбираем его автоматически
+        selected_port = com_ports[0]
+    else:
+        # Если найдено несколько COM портов, создаем выпадающее меню для выбора
+        selected_port_var = tk.StringVar(window)
+        selected_port_var.set(com_ports[0])  # Устанавливаем первый порт по умолчанию
+        selected_port = com_ports[0]
 
-    selected_port_var = tk.StringVar(window)
-    selected_port_var.set(com_ports[0])
-    selected_port = com_ports[0]
+        port_menu = tk.OptionMenu(window, selected_port_var, *com_ports, command=update_port)
+        port_menu.pack(pady=10)
 
-    port_menu = tk.OptionMenu(window, selected_port_var, *com_ports, command=update_port)
-    port_menu.pack(pady=10)
-
-    # Кнопка "Старт"
-    start_button = tk.Button(window, text="Старт", command=lambda: start_reading(label), font=("Arial", 14))
-    start_button.pack(pady=10)
-
-    # Кнопка "Стоп"
-    stop_button = tk.Button(window, text="Стоп", command=stop_reading, font=("Arial", 14))
-    stop_button.pack(pady=10)
+    # Кнопка "Старт/Стоп"
+    start_stop_button = tk.Button(window, text="Старт", command=lambda: toggle_reading(label, start_stop_button), font=("Arial", 14))
+    start_stop_button.pack(pady=10)
 
     window.protocol("WM_DELETE_WINDOW", on_closing)
     window.mainloop()
