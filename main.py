@@ -1,7 +1,6 @@
 import serial
 import tkinter as tk
 from tkinter import messagebox
-from tkinter import Label
 import threading
 import time
 import serial.tools.list_ports
@@ -17,7 +16,7 @@ def get_com_ports():
     ports = serial.tools.list_ports.comports()
     return [port.device for port in ports]
 
-def read_weight():
+def read_weight(label):
     global running, selected_port, latest_weight
     try:
         with serial.Serial(selected_port, 9600, timeout=1) as ser:
@@ -42,7 +41,12 @@ def read_weight():
                             latest_weight = None
                     else:
                         latest_weight = None
-                time.sleep(0.5)
+
+                    # Отображение и запись в файл
+                    show_current_weight(label)
+                    write_weight_to_file()
+
+                time.sleep(5)
     except serial.SerialException as e:
         messagebox.showerror("Ошибка", f"Не удалось открыть порт {selected_port}: {e}")
 
@@ -50,7 +54,7 @@ def start_reading(label):
     global running, selected_port
     if selected_port:
         running = True
-        thread = threading.Thread(target=read_weight)
+        thread = threading.Thread(target=read_weight, args=(label,))
         thread.start()
     else:
         messagebox.showerror("Ошибка", "Пожалуйста, выберите COM порт")
@@ -87,6 +91,11 @@ def update_qr_code(weight_text):
     qr_label.config(image=qr_image)
     qr_label.image = qr_image
 
+def write_weight_to_file():
+    if latest_weight is not None:
+        with open("weights.txt", "a") as file:
+            file.write(f"Вес: {latest_weight} кг\n")
+
 def create_window():
     global window, qr_label
     window = tk.Tk()
@@ -122,10 +131,6 @@ def create_window():
     # Кнопка "Стоп"
     stop_button = tk.Button(window, text="Стоп", command=stop_reading, font=("Arial", 14))
     stop_button.pack(pady=10)
-
-    # Кнопка "Взвесить"
-    weigh_button = tk.Button(window, text="Взвесить", command=lambda: show_current_weight(label), font=("Arial", 14))
-    weigh_button.pack(pady=10)
 
     window.protocol("WM_DELETE_WINDOW", on_closing)
     window.mainloop()
