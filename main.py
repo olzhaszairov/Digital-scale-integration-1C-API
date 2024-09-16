@@ -6,6 +6,7 @@ import time
 import serial.tools.list_ports
 import qrcode
 from PIL import Image, ImageTk
+import json  # Для работы с JSON
 
 # Глобальные переменные
 running = False
@@ -96,8 +97,9 @@ def update_qr_code(weight_text):
 
 def write_weight_to_file():
     if latest_weight is not None:
-        with open("weights.txt", "a") as file:
-            file.write(f"Вес: {latest_weight} кг\n")
+        data = {"weight": f"{latest_weight:.3f}"}
+        with open("weights.json", "w") as file:  # Перезаписываем файл
+            json.dump(data, file)
 
 def create_window():
     global window, qr_label, selected_port
